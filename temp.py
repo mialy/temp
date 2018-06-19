@@ -40,7 +40,11 @@ class Readings:
 			for temp in temps:
 				t = int(int(self.__readfile(temp)) / 1000)
 				index = re.match(r'temp([0-9]+)_input', os.path.basename(temp)).group(1)
-				label = self.__readfile(sensor + "temp" + index + "_label")
+				try:
+					label = self.__readfile(sensor + "temp" + index + "_label")
+				except:
+					label = "UNKNOWN Item"
+
 				readings[name][label] = t
 		t = self.nvidia_temp()
 		if t:
