@@ -14,6 +14,7 @@ class Readings:
 	def __init__(self):
 		self.sensors = {}
 		self.start_time = int(time.time())
+		self.delta_t = {}
 
 	def run(self):
 		current = {}
@@ -54,10 +55,20 @@ class Readings:
 
 	def save_data(self, current, new):
 		for s in new:
+
 			if not s in current:
 				current[s] = {}
 			for i in new[s]:
 				t = new[s][i]
+
+				reading = i + "_" + s
+				if not reading in self.delta_t:
+					self.delta_t[reading] = {}
+				if not t in self.delta_t[reading]:
+					self.delta_t[reading][t] = 1
+				else:
+					self.delta_t[reading][t] += 1
+
 				if not i in current[s]:
 					current[s][i] = {}
 					current[s][i]['min'] = t
@@ -68,6 +79,7 @@ class Readings:
 				if current[s][i]['max'] < t:
 					current[s][i]['max'] = t
 				current[s][i]['cur'] = t
+				current[s][i]['avg'] = self.__avg_delta(reading)
 		return current
 
 	def output(self, readings, scale = 'C'):
@@ -75,9 +87,9 @@ class Readings:
 		rkeys = readings.keys()
 		rkeys = sorted(rkeys)
 		rkeys = sorted(rkeys, key=len, reverse=True)
+		fmt_string = u"{0:>25s}{1:>13s}{2:>13s}{3:>13s}{4:>15s}"
 		for s in rkeys:
-			print(u"{0:>25s}\t{1:>8s}\t{2:>8s}\t{3:>8s}"
-				.format(u"Sensor '" + s + u"'", "Cur", "Min", "Max"));
+			print(fmt_string.format(u"Sensor '" + s + u"'", "Current", "Min", "Max", "Avg"))
 			print("-" * 80)
 			# sort labels
 			keys = readings[s].keys()
@@ -88,11 +100,11 @@ class Readings:
 				cur = self.degree(readings[s][i]['cur'], scale)
 				min = self.degree(readings[s][i]['min'], scale)
 				max = self.degree(readings[s][i]['max'], scale)
-				print(u"{0:>25s}\t{1:>8s}\t{2:>8s}\t{3:>8s}"
-					.format(i, cur, min, max))
+				avg = self.degree(readings[s][i]['avg'], scale, digits=1)
+				print(fmt_string.format(i, cur, min, max, avg))
 			print("\n")
 
-	def degree(self, temp, scale = 'C'):
+	def degree(self, temp, scale = 'C', digits = 0):
 		sign = u'\N{DEGREE SIGN}'
 		if scale == 'K':
 			temp = temp + 273.15
@@ -101,7 +113,9 @@ class Readings:
 			temp = temp * 9/5.0 + 32
 		else:
 			scale = "C"
-		return str(temp) + " " + sign + scale
+
+		fmt = u"{0:." + str(digits) + "f}"
+		return (fmt.format(round(temp + 0.0, digits))) + " " + sign + scale
 
 	def nvidia_temp(self):
 		temp = os.popen("nvidia-settings -q gpucoretemp -t").readline().strip()
@@ -118,6 +132,14 @@ class Readings:
 	def __readfile(self, filename):
 		with open(filename, 'r') as f:
 			return f.readline().strip()
+
+	def __avg_delta(self, name):
+		total = 0
+		count = 0
+		for key, value in self.delta_t[name].items():
+			count += value
+			total += key * value
+		return total / (count + 0.0)
 
 if __name__ == "__main__":
 	app = Readings()
