@@ -4,11 +4,14 @@
 # Author: Mikhail Kyosev <mialygk@gmail.com>
 # License: BSD - 2-caluse
 
+from __future__ import print_function
+from collections import OrderedDict
 import re
 import glob
 import time
 import os
 import datetime
+import functools
 
 class Readings:
 	def __init__(self):
@@ -61,7 +64,7 @@ class Readings:
 					label = "Fan #" + index
 
 				readings[name][label] = {
-					'type': 'fan',
+					'type': "rotary",
 					'value': t
 				}
 
@@ -105,18 +108,21 @@ class Readings:
 					self.delta_t[reading][val] += 1
 
 				if not i in current[s]:
-					current[s][i] = {}
-					current[s][i]['min'] = val
-					current[s][i]['max'] = val
-					current[s][i]['cur'] = val
-					current[s][i]['cur'] = val
-					current[s][i]['type'] = typ
-				if current[s][i]['min'] > val:
-					current[s][i]['min'] = val
-				if current[s][i]['max'] < val:
-					current[s][i]['max'] = val
-				current[s][i]['cur'] = val
-				current[s][i]['avg'] = self.__avg_delta(reading)
+					current[s][i] = [
+						('cur', val),
+						('min', val),
+						('max', val),
+						('avg', val),
+						('type', typ)
+					]
+				else:
+					current[s][i] = [
+						('cur', val),
+						('min', val if val < current[s][i][1][1] else current[s][i][1][1]),
+						('max', val if val > current[s][i][2][1] else current[s][i][2][1]),
+						('avg', self.__avg_delta(reading)),
+						('type', typ)
+					]
 		return current
 
 	def output(self, readings, scale = 'C'):
@@ -129,30 +135,34 @@ class Readings:
 			print(fmt_string.format(u"Sensor '" + s + u"'", "Current", "Min", "Max", "Avg"))
 			print("-" * 80)
 			# sort labels
-			keys = readings[s].keys()
-			keys = sorted(keys)
-			keys = sorted(keys, key=len, reverse=True)
-			for i in keys:
-				typ = readings[s][i]['type']
+			keys = sorted(readings[s].items(), key=functools.cmp_to_key(self.__sort_temp))
+			keys = enumerate(OrderedDict(keys).keys())
+
+			last_type = 'temp'
+			for index, i in keys:
+				typ = readings[s][i][4][1]
 				if typ == 'temp':
-					cur = self.degree(readings[s][i]['cur'], scale)
-					min = self.degree(readings[s][i]['min'], scale)
-					max = self.degree(readings[s][i]['max'], scale)
-					avg = self.degree(readings[s][i]['avg'], scale, digits=1)
-				elif typ == 'fan':
-					cur = self.rpm(readings[s][i]['cur'])
-					min = self.rpm(readings[s][i]['min'])
-					max = self.rpm(readings[s][i]['max'])
-					avg = self.rpm(readings[s][i]['avg'], digits=1)
+					cur = self.degree(readings[s][i][0][1], scale)
+					min = self.degree(readings[s][i][1][1], scale)
+					max = self.degree(readings[s][i][2][1], scale)
+					avg = self.degree(readings[s][i][3][1], scale, digits=1)
+				elif typ == "rotary":
+					cur = self.rpm(readings[s][i][0][1])
+					min = self.rpm(readings[s][i][1][1])
+					max = self.rpm(readings[s][i][2][1])
+					avg = self.rpm(readings[s][i][3][1], digits=1)
 				elif typ == 'voltage':
-					cur = self.voltage(readings[s][i]['cur'])
-					min = self.voltage(readings[s][i]['min'])
-					max = self.voltage(readings[s][i]['max'])
-					avg = self.voltage(readings[s][i]['avg'])
+					cur = self.voltage(readings[s][i][0][1])
+					min = self.voltage(readings[s][i][1][1])
+					max = self.voltage(readings[s][i][2][1])
+					avg = self.voltage(readings[s][i][3][1])
 				else:
 					continue
+				if index and last_type != typ:
+					print('\n', end='')
 				print(fmt_string.format(i, cur, min, max, avg))
-			print("\n")
+				last_type = typ
+			print('\n', end='')
 
 	def degree(self, temp, scale='C', digits=0):
 		sign = u'\N{DEGREE SIGN}'
@@ -202,6 +212,17 @@ class Readings:
 			count += value
 			total += key * value
 		return total / (count + 0.0)
+
+	def __sort_temp(self, a, b):
+		if a[1][4][1] != b[1][4][1]:
+			return len(a[1][4][1]) - len(b[1][4][1])
+
+		# asc sort by names
+		if len(a[0]) == len(b[0]):
+			return -1 if a[0] < b[0] else 1 if a[0] > b[0] else 0
+
+		# desc sort by length
+		return len(b[0]) - len(a[0])
 
 if __name__ == "__main__":
 	app = Readings()
