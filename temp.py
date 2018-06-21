@@ -12,7 +12,6 @@ import datetime
 
 class Readings:
 	def __init__(self):
-		self.sensors = {}
 		self.start_time = int(time.time())
 		self.delta_t = {}
 
@@ -33,6 +32,7 @@ class Readings:
 
 	def fetch_data(self):
 		readings = {}
+
 		sensors = sorted(glob.glob("/sys/class/hwmon/hwmon*/"))
 		for sensor in sensors:
 			name = self.__readfile(sensor + "name")
@@ -44,41 +44,78 @@ class Readings:
 				try:
 					label = self.__readfile(sensor + "temp" + index + "_label")
 				except:
-					label = "UNKNOWN Item"
+					label = "Item #" + index
 
-				readings[name][label] = t
+				readings[name][label] = {
+					'type': 'temp',
+					'value': t
+				}
+
+			fans = sorted(glob.glob(sensor + "fan*_input"))
+			for fan in fans:
+				t = int(self.__readfile(fan))
+				index = re.match(r'fan([0-9]+)_input', os.path.basename(fan)).group(1)
+				try:
+					label = self.__readfile(sensor + "fan" + index + "_label")
+				except:
+					label = "Fan #" + index
+
+				readings[name][label] = {
+					'type': 'fan',
+					'value': t
+				}
+
+			voltage = sorted(glob.glob(sensor + "in*_input"))
+			for volt in voltage:
+				t = int(self.__readfile(volt))
+				index = re.match(r'in([0-9]+)_input', os.path.basename(volt)).group(1)
+				try:
+					label = self.__readfile(sensor + "in" + index + "_label")
+				except:
+					label = "Voltage #" + index
+
+				readings[name][label] = {
+					'type': 'voltage',
+					'value': t / 1000.0
+				}
+
 		t = self.nvidia_temp()
 		if t:
 			readings["nvidia"] = {}
-			readings["nvidia"]["GPU"] = t
+			readings["nvidia"]["GPU"] = {
+				'type': 'temp',
+				'value': t
+			}
 		return readings
 
 	def save_data(self, current, new):
 		for s in new:
-
 			if not s in current:
 				current[s] = {}
 			for i in new[s]:
-				t = new[s][i]
+				val = new[s][i]['value']
+				typ = new[s][i]['type']
 
 				reading = i + "_" + s
 				if not reading in self.delta_t:
 					self.delta_t[reading] = {}
-				if not t in self.delta_t[reading]:
-					self.delta_t[reading][t] = 1
+				if not val in self.delta_t[reading]:
+					self.delta_t[reading][val] = 1
 				else:
-					self.delta_t[reading][t] += 1
+					self.delta_t[reading][val] += 1
 
 				if not i in current[s]:
 					current[s][i] = {}
-					current[s][i]['min'] = t
-					current[s][i]['max'] = t
-					current[s][i]['cur'] = t
-				if current[s][i]['min'] > t:
-					current[s][i]['min'] = t
-				if current[s][i]['max'] < t:
-					current[s][i]['max'] = t
-				current[s][i]['cur'] = t
+					current[s][i]['min'] = val
+					current[s][i]['max'] = val
+					current[s][i]['cur'] = val
+					current[s][i]['cur'] = val
+					current[s][i]['type'] = typ
+				if current[s][i]['min'] > val:
+					current[s][i]['min'] = val
+				if current[s][i]['max'] < val:
+					current[s][i]['max'] = val
+				current[s][i]['cur'] = val
 				current[s][i]['avg'] = self.__avg_delta(reading)
 		return current
 
@@ -96,15 +133,28 @@ class Readings:
 			keys = sorted(keys)
 			keys = sorted(keys, key=len, reverse=True)
 			for i in keys:
-				t = readings[s][i]
-				cur = self.degree(readings[s][i]['cur'], scale)
-				min = self.degree(readings[s][i]['min'], scale)
-				max = self.degree(readings[s][i]['max'], scale)
-				avg = self.degree(readings[s][i]['avg'], scale, digits=1)
+				typ = readings[s][i]['type']
+				if typ == 'temp':
+					cur = self.degree(readings[s][i]['cur'], scale)
+					min = self.degree(readings[s][i]['min'], scale)
+					max = self.degree(readings[s][i]['max'], scale)
+					avg = self.degree(readings[s][i]['avg'], scale, digits=1)
+				elif typ == 'fan':
+					cur = self.rpm(readings[s][i]['cur'])
+					min = self.rpm(readings[s][i]['min'])
+					max = self.rpm(readings[s][i]['max'])
+					avg = self.rpm(readings[s][i]['avg'], digits=1)
+				elif typ == 'voltage':
+					cur = self.voltage(readings[s][i]['cur'])
+					min = self.voltage(readings[s][i]['min'])
+					max = self.voltage(readings[s][i]['max'])
+					avg = self.voltage(readings[s][i]['avg'])
+				else:
+					continue
 				print(fmt_string.format(i, cur, min, max, avg))
 			print("\n")
 
-	def degree(self, temp, scale = 'C', digits = 0):
+	def degree(self, temp, scale='C', digits=0):
 		sign = u'\N{DEGREE SIGN}'
 		if scale == 'K':
 			temp = temp + 273.15
@@ -114,8 +164,20 @@ class Readings:
 		else:
 			scale = "C"
 
+		return self.rounding(temp, digits) + ' ' + sign + scale
+
+	def rpm(self, value, digits=0):
+		return self.rounding(value, digits) + ' rpm'
+
+	def voltage(self, value, digits=2):
+		sign = '+'
+		if value < 0:
+			sign = '-'
+		return sign + self.rounding(value, digits) + ' V'
+
+	def rounding(self, value, digits=0):
 		fmt = u"{0:." + str(digits) + "f}"
-		return (fmt.format(round(temp + 0.0, digits))) + " " + sign + scale
+		return (fmt.format(round(value + 0.0, digits)))
 
 	def nvidia_temp(self):
 		temp = os.popen("nvidia-settings -q gpucoretemp -t").readline().strip()
