@@ -26,8 +26,8 @@ class Readings:
 				now = int(time.time()) - int(self.start_time)
 				self.save_data(current, self.fetch_data())
 				print("\033[0m\033[2J\033[0;0H")
-				print("Running from: {0:10}\n".format(str(datetime.timedelta(seconds = now))))
 				self.output(current, "C")
+				print("Running from: {0:10}".format(str(datetime.timedelta(seconds = now))))
 				print("Press CTRL + C to exit...")
 				time.sleep(1)
 		except KeyboardInterrupt:
