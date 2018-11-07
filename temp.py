@@ -82,13 +82,27 @@ class Readings:
 					'value': t / 1000.0
 				}
 
-		t = self.nvidia_temp()
-		if t:
-			readings["nvidia"] = {}
-			readings["nvidia"]["GPU"] = {
+		try:
+			readings.setdefault("nvidia", {})
+			readings["nvidia"]["Core"] = {
 				'type': 'temp',
-				'value': t
+				'value': self.nvidia_temp()
 			}
+		except:
+			pass
+
+		try:
+			readings.setdefault("nvidia", {})
+			readings['nvidia']['Fan'] = {
+				'type': 'rotary',
+				'value': self.nvidia_fan()
+			}
+		except:
+			pass
+
+		if not len(readings["nvidia"].keys()):
+			del(readings["nvidia"])
+
 		return readings
 
 	def save_data(self, current, new):
@@ -190,8 +204,8 @@ class Readings:
 		return (fmt.format(round(value + 0.0, digits)))
 
 	def nvidia_temp(self):
-		temp = os.popen("nvidia-settings -q gpucoretemp -t").readline().strip()
 		try:
+			temp = os.popen("nvidia-settings -q gpucoretemp -t").readline().strip()
 			return int(temp)
 		except:
 			try:
@@ -199,7 +213,19 @@ class Readings:
 				temp = int(re.search(r': ([0-9]+) C', temp, re.M | re.I).group(1))
 				return temp
 			except:
-				return 0
+				raise Exception("Invalid reading")
+
+	def nvidia_fan(self):
+		try:
+			val = os.popen("nvidia-settings -q GPUCurrentFanSpeed -t").readline().strip()
+			return int(val)
+		except:
+			try:
+				val = os.popen("nvidia-smi -a | grep -i Fan\ Speed").read().strip()
+				val = int(re.search(r': ([0-9]+) \%', val, re.M | re.I).group(1))
+				return val
+			except:
+				raise Exception("Invalid reading")
 
 	def __readfile(self, filename):
 		with open(filename, 'r') as f:
