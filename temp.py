@@ -12,6 +12,7 @@ import time
 import os
 import datetime
 import functools
+import curses
 
 class Readings:
 	def __init__(self):
@@ -20,18 +21,29 @@ class Readings:
 
 	def run(self):
 		current = {}
+		stdscr = curses.initscr()
+		curses.noecho()
+		curses.cbreak()
+		stdscr.keypad(True)
 
 		try:
 			while True:
 				now = int(time.time()) - int(self.start_time)
 				self.save_data(current, self.fetch_data())
-				print("\033[0m\033[2J\033[0;0H")
+				stdscr.clear()
+				stdscr.refresh()
 				self.output(current, "C")
-				print("Running from: {0:10}".format(str(datetime.timedelta(seconds = now))))
-				print("Press CTRL + C to exit...")
+				print("\rRunning from: {0:10}".format(str(datetime.timedelta(seconds = now))))
+				print("\rPress CTRL + C to exit...\r\n")
 				time.sleep(1)
+
 		except KeyboardInterrupt:
 			pass
+
+		curses.nocbreak()
+		stdscr.keypad(False)
+		curses.echo()
+		curses.endwin()
 
 	def fetch_data(self):
 		readings = {}
@@ -144,10 +156,10 @@ class Readings:
 		rkeys = readings.keys()
 		rkeys = sorted(rkeys)
 		rkeys = sorted(rkeys, key=len, reverse=True)
-		fmt_string = u"{0:>25s}{1:>13s}{2:>13s}{3:>13s}{4:>15s}"
+		fmt_string = u"\r{0:>25s}{1:>13s}{2:>13s}{3:>13s}{4:>15s}"
 		for s in rkeys:
 			print(fmt_string.format(u"Sensor '" + s + u"'", "Current", "Min", "Max", "Avg"))
-			print("-" * 80)
+			print("\r" + ("-" * 80))
 			# sort labels
 			keys = sorted(readings[s].items(), key=functools.cmp_to_key(self.__sort_temp))
 			keys = enumerate(OrderedDict(keys).keys())
@@ -174,6 +186,7 @@ class Readings:
 					continue
 				if index and last_type != typ:
 					print('\n', end='')
+
 				print(fmt_string.format(i, cur, min, max, avg))
 				last_type = typ
 			print('\n', end='')
@@ -253,4 +266,3 @@ class Readings:
 if __name__ == "__main__":
 	app = Readings()
 	app.run()
-
