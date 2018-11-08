@@ -13,6 +13,7 @@ import os
 import datetime
 import functools
 import curses
+from subprocess import Popen, PIPE
 
 class Readings:
 	def __init__(self):
@@ -218,11 +219,15 @@ class Readings:
 
 	def nvidia_temp(self):
 		try:
-			temp = os.popen("nvidia-settings -q gpucoretemp -t").readline().strip()
+			process = Popen(['nvidia-settings', '-q', 'gpucoretemp', '-t'], stdout=PIPE, stderr=PIPE)
+			temp, stderr = process.communicate()
+			if not temp:
+				raise Exception("None reading")
 			return int(temp)
 		except:
 			try:
-				temp = os.popen("nvidia-smi -q -d TEMPERATURE").read().strip()
+				process = Popen(['nvidia-smi', '-q', '-d', 'TEMPERATURE'], stdout=PIPE, stderr=PIPE)
+				temp, stderr = process.communicate()
 				temp = int(re.search(r': ([0-9]+) C', temp, re.M | re.I).group(1))
 				return temp
 			except:
@@ -230,11 +235,16 @@ class Readings:
 
 	def nvidia_fan(self):
 		try:
-			val = os.popen("nvidia-settings -q GPUCurrentFanSpeed -t").readline().strip()
+			process = Popen(['nvidia-settings', '-q', 'GPUCurrentFanSpeed', '-t'], stdout=PIPE, stderr=PIPE)
+			val, stderr = process.communicate()
+			if not val:
+				raise Exception("None reading")
 			return int(val)
 		except:
 			try:
-				val = os.popen("nvidia-smi -a | grep -i Fan\ Speed").read().strip()
+				nvidiaSmi = Popen(['nvidia-smi', '-a'], stdout=PIPE, stderr=PIPE)
+				process = Popen(['grep', '-i', 'Fan\ Speed'], stdin=nvidiaSmi.stdout, stdout=PIPE, stderr=PIPE)
+				val, stderr = process.communicate()
 				val = int(re.search(r': ([0-9]+) \%', val, re.M | re.I).group(1))
 				return val
 			except:
