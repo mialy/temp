@@ -234,21 +234,11 @@ class Readings:
 				raise Exception("Invalid reading")
 
 	def nvidia_fan(self):
-		try:
-			process = Popen(['nvidia-settings', '-q', 'GPUCurrentFanSpeed', '-t'], stdout=PIPE, stderr=PIPE)
-			val, stderr = process.communicate()
-			if not val:
-				raise Exception("None reading")
-			return int(val)
-		except:
-			try:
-				nvidiaSmi = Popen(['nvidia-smi', '-a'], stdout=PIPE, stderr=PIPE)
-				process = Popen(['grep', '-i', 'Fan\ Speed'], stdin=nvidiaSmi.stdout, stdout=PIPE, stderr=PIPE)
-				val, stderr = process.communicate()
-				val = int(re.search(r': ([0-9]+) \%', val, re.M | re.I).group(1))
-				return val
-			except:
-				raise Exception("Invalid reading")
+		process = Popen(['nvidia-settings', '-q', 'GPUCurrentFanSpeedRPM', '-t'], stdout=PIPE, stderr=PIPE)
+		val, stderr = process.communicate()
+		if not val:
+			raise Exception("None reading")
+		return int(val)
 
 	def __readfile(self, filename):
 		with open(filename, 'r') as f:
